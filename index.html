@@ -1,0 +1,159 @@
+<html lang="en">
+<head>
+    <title>COVID-19 by County</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            margin: 0;
+            width: 100vw;
+            height: 100vh;
+            min-width: 960px;
+            min-height: 800px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        svg {
+            border: solid black 1px;
+            margin-bottom: 50px;
+        }
+
+        label {
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+        }
+
+        div.tooltip {
+            position: absolute;
+            text-align: center;
+            padding-left: 5px;
+            padding-right: 5px;
+            background: white;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 960px;
+            height: 800px;
+            padding: 50px;
+        }
+
+        .counties {
+            fill: none;
+            stroke: lightgray;
+        }
+
+        .states, .nation {
+            fill: none;
+            stroke: black;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <svg id="map" width="960" height="600"></svg>
+    <h3><label id="date-label" for="date" style="display: block"></label></h3>
+    <input id="date" type="range" min="0" value="0" step="1" oninput="updateDate(this.value)">
+</div>
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://d3js.org/topojson.v2.min.js"></script>
+<script>
+    const covidURL = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv";
+    const dates = [];
+    const dateSelect = document.getElementById('date');
+    const dateLabel = document.getElementById('date-label');
+    const fipsToCases = d3.map();
+    const mapSVG = d3.select("#map");
+    const width = +mapSVG.attr("width");
+    const height = +mapSVG.attr("height");
+    const view = mapSVG.attr("viewBox", [0, 0, width, height]).append("g");
+    const path = d3.geoPath();
+    const zoom = d3.zoom().translateExtent([[0, 0], [width, height]]).scaleExtent([1, 8]).on("zoom", zoomed);
+    let colorScale;
+    let tooltip = d3.select("body").append("div").attr("class", "tooltip").style("opacity", 0);
+
+    function updateDate(index)
+    {
+        dateLabel.innerHTML = dates[index];
+        view.select(".counties").selectAll("path")
+            .attr("fill", d => colorScale(fipsToCases.get(d.id).get(dates[dateSelect.value])));
+    }
+
+    function zoomed()
+    {
+        const {transform} = d3.event;
+        view.attr("transform", transform);
+        view.attr("stroke-width", 1 / transform.k);
+    }
+
+    d3.csv(covidURL).then(covid =>
+    {
+        for(let i = 11; i < covid.columns.length; i++)
+        {
+            dates.push(covid.columns[i]);
+        }
+        dateSelect.max = dates.length - 1;
+        dateSelect.oninput();
+
+        let maxCases = 0;
+
+        covid = covid.filter(county => county.Admin2 !== "");
+        covid.forEach(county =>
+        {
+            let dateToCases = d3.map();
+            dates.forEach(date =>
+            {
+                let cases = county[date];
+                maxCases = parseInt(cases) > maxCases ? cases : maxCases;
+                dateToCases.set(date, cases);
+            });
+
+            let fips = county.FIPS.length === 4 ? "0" + county.FIPS : county.FIPS;
+            fipsToCases.set(fips, dateToCases);
+        });
+
+        colorScale = d3.scaleSequentialSymlog(d3.interpolateReds).domain([0, maxCases]);
+
+        d3.json("https://d3js.org/us-10m.v1.json").then(us =>
+        {
+            let nycFIPS = d3.set(["36047", "36085", "36081", "36005", "36061"]);
+
+            let counties = topojson.feature(us, us.objects.counties).features.filter(d => !nycFIPS.has(d.id));
+            let nycCounties = topojson.merge(us, us.objects.counties.geometries.filter(d => nycFIPS.has(d.id)));
+            nycCounties.id = "36061";
+            counties.push(nycCounties);
+
+            view.append("g").attr("class", "counties").selectAll("path")
+                .data(counties)
+                .join("path").attr("d", path)
+                .attr("fill", d => colorScale(fipsToCases.get(d.id).get(dates[dateSelect.value])))
+                .on("mouseover", d =>
+                {
+                    tooltip.style("opacity", .9);
+                    tooltip.html(fipsToCases.get(d.id).get(dates[dateSelect.value]))
+                        .style("left", (d3.event.pageX) + "px").style("top", (d3.event.pageY - 28) + "px");
+                })
+                .on("mouseout", () =>
+                {
+                    tooltip.style("opacity", 0);
+                });
+
+            view.append("path")
+                .datum(topojson.mesh(us, us.objects.states, (a, b) => a !== b))
+                .attr("class", "states").attr("d", path);
+
+            view.append("path")
+                .datum(topojson.mesh(us, us.objects.nation))
+                .attr("class", "nation").attr("d", path);
+
+            mapSVG.call(zoom);
+        });
+    });
+</script>
+</body>
+</html>
