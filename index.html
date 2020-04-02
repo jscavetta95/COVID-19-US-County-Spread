@@ -75,7 +75,7 @@
 </head>
 <body>
 <div class="container">
-    <h2>Confirmed COVID-19 Cases per County over Time</h2>
+    <h2>Confirmed COVID-19 Cases by US County over Time</h2>
     <svg id="map" width="960" height="600"></svg>
     <p>Data source:
         <a href="https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series">
@@ -157,8 +157,8 @@
                 dateToCases.set(date, cases);
             });
 
-            let fips = county.FIPS.length === 4 ? "0" + county.FIPS : county.FIPS;
-            fipsToCases.set(fips, dateToCases);
+            let fips = county.FIPS.split(".")[0];
+            fipsToCases.set(fips.length === 4 ? "0" + fips : fips, dateToCases);
         });
 
         colorScale = d3.scaleSequentialSymlog(d3.interpolateReds).domain([0, maxCases]);
