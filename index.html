@@ -135,6 +135,21 @@
         }, 200);
     }
 
+    function parseFIPSCodes(fips)
+    {
+        if(fips.includes("."))
+        {
+            fips = fips.split(".")[0];
+        }
+
+        if(fips.length === 4)
+        {
+            fips = "0" + fips;
+        }
+
+        return fips;
+    }
+
     d3.csv(covidURL).then(covid =>
     {
         for(let i = 11; i < covid.columns.length; i++)
@@ -157,8 +172,7 @@
                 dateToCases.set(date, cases);
             });
 
-            let fips = county.FIPS.split(".")[0];
-            fipsToCases.set(fips.length === 4 ? "0" + fips : fips, dateToCases);
+            fipsToCases.set(parseFIPSCodes(county.FIPS), dateToCases);
         });
 
         colorScale = d3.scaleSequentialSymlog(d3.interpolateReds).domain([0, maxCases]);
